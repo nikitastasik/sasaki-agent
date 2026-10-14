@@ -85,6 +85,11 @@
   .block.closed h2 .arr { transform: rotate(-90deg); }
   .block.closed .body { display: none; }
   .hint { font-size: 12px; color: var(--muted); display: block; margin: 2px 0 6px; }
+  .profile-select, .salary-input {
+    width: 100%; border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px 10px; background: var(--card); color: var(--fg); font: inherit;
+  }
+  .profile-add { width: 100%; margin-top: 7px; }
 
   button {
     font: inherit; cursor: pointer; border: 1px solid var(--line);
@@ -426,6 +431,13 @@
       <div class="brand">sasaki-agent <small><a href="https://10byrs.com" target="_blank" rel="noopener">by 10byrs</a></small></div>
     </div>
     <div class="side-scroll">
+      <div class="block" data-block="candidate">
+        <h2>Кандидат<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
+        <div class="body">
+          <select class="profile-select" id="profile-switch" aria-label="Выбрать кандидата"></select>
+          <button class="profile-add" id="profile-create-open">Добавить профиль</button>
+        </div>
+      </div>
       <div class="block" data-block="level">
         <h2>Уровень<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
         <div class="body">
@@ -436,7 +448,7 @@
       <div class="block" data-block="direction">
         <h2>Направление<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
         <div class="body">
-          <span class="hint">Отметка добавит в ключевые слова</span>
+          <span class="hint">Поиск по названию вакансии</span>
           <div class="opts" id="presets"></div>
         </div>
       </div>
@@ -445,6 +457,15 @@
         <h2>Формат<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
         <div class="body">
           <div class="opts" id="wformats"></div>
+        </div>
+      </div>
+
+      <div class="block" data-block="salary">
+        <h2>Зарплата<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
+        <div class="body">
+          <span class="hint">Минимум в месяц на руки, руб. 0 - без порога</span>
+          <input class="salary-input" id="salary-min" type="number" min="0" step="10000" />
+          <label class="opt"><input id="salary-unknown" type="checkbox" /><span>Показывать без зарплаты</span></label>
         </div>
       </div>
 
@@ -488,6 +509,8 @@
         <span class="search-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
         <input id="search" class="search" placeholder="Должность, компания или источник" autocomplete="off" />
         </div>
+        <button id="mail-open">Письма Gmail</button>
+        <button id="profile-open">Профиль</button>
         <button class="primary" id="add-open">Добавить отклик</button>
       </div>
     </div>
@@ -541,7 +564,7 @@
     <button class="icon-btn" id="add-close" title="Закрыть">✕</button>
   </div>
   <div class="drawer-body">
-    <label class="fld"><span>Название вакансии</span><input id="f-title" placeholder="Продуктовый дизайнер" autocomplete="off" /></label>
+    <label class="fld"><span>Название вакансии</span><input id="f-title" placeholder="Python-разработчик" autocomplete="off" /></label>
     <label class="fld"><span>Компания</span><input id="f-company" placeholder="Яндекс" autocomplete="off" /></label>
     <div class="f-row">
       <label class="fld"><span>Дата отклика</span><input id="f-date" inputmode="numeric" placeholder="дд.мм.гггг" maxlength="10" autocomplete="off" /></label>
@@ -560,11 +583,87 @@
   </div>
 </aside>
 
+<div class="drawer-back" id="profile-create-back" hidden></div>
+<aside class="drawer" id="profile-create-drawer" hidden aria-label="Новый профиль">
+  <div class="drawer-head"><h2>Новый профиль</h2><button class="icon-btn" id="profile-create-close" title="Закрыть">✕</button></div>
+  <div class="drawer-body">
+    <p class="note">Резюме, поиск и отклики будут отдельными. После создания добавь контакты и PDF.</p>
+    <label class="fld"><span>Имя профиля</span><input id="profile-create-name" placeholder="Имя кандидата" maxlength="80" /></label>
+    <label class="fld"><span>Специальность</span><select id="profile-create-kind">
+      <option value="marketing">Маркетинг</option>
+      <option value="engineering">IT и ML</option>
+      <option value="custom">Своя специальность</option>
+    </select></label>
+    <p class="note">Для маркетинга уже заданы роли и подходящие источники. Их можно изменить после создания.</p>
+    <p class="note" id="profile-create-error" hidden></p>
+  </div>
+  <div class="drawer-foot"><button class="primary block-btn" id="profile-create-save">Создать профиль</button></div>
+</aside>
+
+<div class="drawer-back" id="profile-back" hidden></div>
+<aside class="drawer" id="profile-drawer" hidden aria-label="Профиль кандидата">
+  <div class="drawer-head"><h2 id="profile-title">Профиль кандидата</h2><button class="icon-btn" id="profile-close" title="Закрыть">✕</button></div>
+  <div class="drawer-body">
+    <p class="note">Данные и PDF хранятся только на этом Mac. Перед отправкой проверь их.</p>
+    <div class="f-row">
+      <label class="fld"><span>Имя</span><input id="p-first" /></label>
+      <label class="fld"><span>Фамилия</span><input id="p-last" /></label>
+    </div>
+    <label class="fld"><span>Отчество</span><input id="p-middle" /></label>
+    <label class="fld"><span>Почта</span><input id="p-email" type="email" /></label>
+    <label class="fld"><span>Телефон</span><input id="p-phone" /></label>
+    <label class="fld"><span>Telegram</span><input id="p-telegram" /></label>
+    <label class="fld"><span>Город</span><input id="p-city" /></label>
+    <label class="fld"><span>Резюме PDF</span><input id="p-resume" type="file" accept="application/pdf,.pdf" /></label>
+    <p class="note" id="p-resume-info"></p>
+    <p class="note" id="p-err" hidden></p>
+  </div>
+  <div class="drawer-foot"><button class="primary block-btn" id="profile-save">Сохранить профиль</button></div>
+</aside>
+
+<div class="drawer-back" id="mail-back" hidden></div>
+<aside class="drawer" id="mail-drawer" hidden aria-label="Письма о вакансиях">
+  <div class="drawer-head"><h2>Письма о вакансиях</h2><button class="icon-btn" id="mail-close" title="Закрыть">✕</button></div>
+  <div class="drawer-body">
+    <p class="note" id="mail-sync"></p>
+    <div id="mail-list"></div>
+  </div>
+</aside>
+
+<div class="drawer-back" id="apply-back" hidden></div>
+<aside class="drawer" id="apply-drawer" hidden aria-label="Отправка отклика">
+  <div class="drawer-head"><h2>Отклик на вакансию</h2><button class="icon-btn" id="apply-close" title="Закрыть">✕</button></div>
+  <div class="drawer-body">
+    <p id="apply-title"></p>
+    <p class="note" id="apply-info"></p>
+    <button id="apply-site">Открыть вакансию</button>
+    <p class="note" id="apply-progress"></p>
+    <label class="opt"><input id="apply-consent" type="checkbox" /><span>Я проверил данные и обязательные согласия на сайте. Подтверждаю отправку этого отклика.</span></label>
+  </div>
+  <div class="drawer-foot">
+    <button id="apply-prepare">Заполнить форму</button>
+    <button class="primary" id="apply-send" hidden>Отправить отклик</button>
+    <button class="primary" id="apply-confirm" hidden>Я отправил вручную</button>
+  </div>
+</aside>
+
 <div class="toast" id="toast"></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
 let state = { keywords: [], stopwords: [], sources: [] };
+const originalFetch = window.fetch.bind(window);
+window.fetch = (input, init = {}) => {
+  if (typeof input === "string" && input.startsWith("/api/")) {
+    const id = sessionStorage.getItem("sasakiProfile");
+    if (id) {
+      const headers = new Headers(init.headers);
+      if (!headers.has("x-sasaki-profile")) headers.set("x-sasaki-profile", id);
+      return originalFetch(input, { ...init, headers });
+    }
+  }
+  return originalFetch(input, init);
+};
 
 function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.classList.add("show");
@@ -574,7 +673,12 @@ function toast(msg) {
 // Изменение любого чекбокса/списка применяется сразу: короткий дебаунс,
 // чтобы серия кликов ушла одним запросом.
 let saveTimer;
-function markDirty() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
+let saveInFlight;
+function markDirty() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { saveTimer = null; saveInFlight = save(); }, 400);
+}
+const storageKey = (name) => `${name}:${state.activeProfile?.id || "main"}`;
 
 // --- чекбокс-строка ---------------------------------------------------------
 function optRow(text, checked, onToggle, type = "checkbox") {
@@ -683,17 +787,21 @@ function renderLevels() {
 }
 
 // --- направления (специализации) → добавляются в ключевые слова -------------
-const PRESETS = ["продуктовый дизайн", "UX/UI", "web-дизайн", "графический дизайн", "motion-дизайн", "иллюстрация"];
+const ENGINEERING_PRESETS = ["Python-разработчик", "Python Engineer", "Python Backend", "ML-инженер", "ML-разработчик", "инженер машинного обучения", "Data Scientist", "MLOps-инженер", "NLP-инженер", "AI-инженер", "Detection Engineer", "Python Security Engineer"];
+const MARKETING_PRESETS = ["маркетолог", "digital-маркетолог", "продуктовый маркетолог", "бренд-менеджер", "performance-маркетолог", "CRM-маркетолог"];
+let PRESETS = ENGINEERING_PRESETS;
 let dirs = new Set(); // отмеченные направления
 
 function renderPresets() {
   const el = $("presets"); el.textContent = "";
-  PRESETS.forEach((p) => {
+  [...new Set([...PRESETS, ...dirs])].forEach((p) => {
     el.append(optRow(p, dirs.has(p), (on) => {
       if (on) dirs.add(p); else dirs.delete(p);
       markDirty();
     }));
   });
+  el.append(addRow((value) => { dirs.add(value); markDirty(); renderPresets(); }));
+  $("run").disabled = dirs.size === 0 && !(state.levels || []).some((level) => level.on && level.keywords.length);
 }
 
 // --- экран первого запуска ---------------------------------------------------
@@ -701,7 +809,7 @@ function renderPresets() {
 // критериев нет, показывать нечего. Сохраняем и сразу гоним первый сбор.
 function renderOnboard() {
   const d = $("onb-dirs"); d.textContent = "";
-  PRESETS.forEach((p) => d.append(optRow(p, dirs.has(p), (on) => {
+  [...new Set([...PRESETS, ...dirs])].forEach((p) => d.append(optRow(p, dirs.has(p), (on) => {
     if (on) dirs.add(p); else dirs.delete(p);
     syncOnboardBtn();
   })));
@@ -713,9 +821,9 @@ function renderOnboard() {
   syncOnboardBtn();
 }
 
-// Без направления и уровня прогон вернёт пустоту — не пускаем.
+// Для поиска нужна хотя бы одна роль. Грейд может быть любым.
 function syncOnboardBtn() {
-  $("onb-go").disabled = dirs.size === 0 || !(state.levels || []).some((l) => l.on);
+  $("onb-go").disabled = dirs.size === 0;
 }
 
 $("onb-go").onclick = async () => {
@@ -731,8 +839,8 @@ $("onb-go").onclick = async () => {
 
 // --- источники --------------------------------------------------------------
 // Телеграм в общем списке не показываем — вместо него отдельные каналы.
-// linkedin/2gis скрыты и выключены в конфиге.
-const HIDDEN_SOURCES = new Set(["telegram", "linkedin", "2gis"]);
+// Telegram показывается отдельным списком каналов.
+const HIDDEN_SOURCES = new Set(["telegram"]);
 // Агрегаторы отделены от карьерных сайтов компаний; всё, чего нет в списке,
 // считается сайтом компании.
 const AGGREGATORS = new Set(["getmatch", "habr", "hirehi", "finder", "designer.ru", "hh", "linkedin", "careerspace", "geekjob"]);
@@ -761,9 +869,7 @@ function renderTgChannels() {
 // вакансия может подходить, а осознанно выбирать «не указан» никто не станет
 const WORK_FORMATS = ["удалённо", "гибрид", "офис"];
 // какие форматы скрыты в ленте (переживает перезагрузку)
-const hiddenFormats = new Set(
-  JSON.parse(localStorage.getItem("hiddenFormats") || "[]").map((s) => String(s).toLowerCase())
-);
+const hiddenFormats = new Set();
 
 function workFormat(v) {
   // источник честно сказал, что формата не знает (hh: в RSS только регион) —
@@ -798,7 +904,7 @@ function renderWFormats() {
   WORK_FORMATS.forEach((f) => {
     el.append(optRow(f, !hiddenFormats.has(f), (on) => {
       if (on) hiddenFormats.delete(f); else hiddenFormats.add(f);
-      localStorage.setItem("hiddenFormats", JSON.stringify([...hiddenFormats]));
+      localStorage.setItem(storageKey("hiddenFormats"), JSON.stringify([...hiddenFormats]));
       markDirty(); // уходит и в config.formats — критерий следующего прогона
       renderMain();
     }));
@@ -813,7 +919,7 @@ const PERIODS = [
   { days: 90, label: "за три месяца" },
   { days: 180, label: "за полгода" },
 ];
-let periodDays = Number(localStorage.getItem("periodDays")) || 180;
+let periodDays = 180;
 
 function jobDate(v) { return Date.parse(v.published || v.collectedAt || "") || 0; }
 
@@ -822,7 +928,7 @@ function renderPeriods() {
   PERIODS.forEach(({ days, label }) => {
     el.append(optRow(label, periodDays === days, () => {
       periodDays = days; // радио: выбор всегда ровно один
-      localStorage.setItem("periodDays", String(periodDays));
+      localStorage.setItem(storageKey("periodDays"), String(periodDays));
       renderPeriods(); renderMain();
     }, "radio"));
   });
@@ -836,7 +942,7 @@ const VIEWS = [
   { key: "applied", label: "Отклики" },
   { key: "hidden", label: "Скрытые" },
 ];
-let view = localStorage.getItem("view") || "new";
+let view = "new";
 const STATUSES = ["Новый", "Отклик", "Без ответа", "Собес", "Тестовое", "Оффер", "Отказ", "Архив"];
 const STATUS_COLOR = {
   "Новый": "#3b82f6",
@@ -932,7 +1038,12 @@ async function setStatus(v, status, note) {
     body: JSON.stringify({ source: v.source, id: v.id, status }),
   });
   if (!r.ok) { v.status = prev; renderMain(); toast("Не удалось сменить статус"); }
-  else if (note) toast(note);
+  else {
+    const data = await r.json();
+    if (data.jobs) state.jobs = data.jobs;
+    renderMain();
+    if (note) toast(note);
+  }
 }
 
 // Удаление ручного отклика — необратимо (в ленте вакансий его нет, вернуть
@@ -1020,7 +1131,7 @@ function renderTabs() {
     // отклики/скрытые нет), иначе счётчик расходится с содержимым
     c.textContent = scopedJobs(key).filter((v) => inView(v, key)).length;
     b.append(c);
-    b.onclick = () => { view = key; localStorage.setItem("view", key); renderMain(); };
+    b.onclick = () => { view = key; localStorage.setItem(storageKey("view"), key); renderMain(); };
     el.append(b);
   });
 }
@@ -1047,7 +1158,7 @@ const EMPTY_TEXT = {
   },
   applied: {
     title: "Откликов пока нет",
-    sub: "Сюда попадут вакансии, на которые ты откликнулся, — по кнопке «В отклики» в списке. У каждой можно вести статус и хранить сопроводительное письмо.",
+    sub: "Здесь будут отправленные и сохраненные отклики. Для каждой вакансии можно вести статус и хранить сопроводительное письмо.",
   },
   hidden: {
     title: "Скрытых вакансий нет",
@@ -1106,8 +1217,20 @@ function renderRows() {
     const ttl = document.createElement("div"); ttl.className = "job-title";
     setHl(ttl, v.title || "—", q);
     const sub = document.createElement("div"); sub.className = "job-sub";
-    setHl(sub, `${companyOf(v) || "не указана"} · ${gradeOf(v) || "не указан"}`, q);
+    const count = companyOf(v) ? ` · откликов в компании: ${v.companyAppliedCount || 0}` : "";
+    setHl(sub, `${companyOf(v) || "не указана"} · ${gradeOf(v) || "не указан"}${count}`, q);
     job.append(ttl, sub);
+    if (v.mailHistory?.length) {
+      const lastMail = v.mailHistory.at(-1);
+      const line = document.createElement("div"); line.className = "job-sub";
+      line.textContent = `Gmail: ${lastMail.stage} · ${lastMail.subject}`;
+      if (/^https:\/\/mail\.google\.com\//.test(lastMail.url || "")) {
+        const link = document.createElement("a"); link.href = lastMail.url;
+        link.target = "_blank"; link.rel = "noopener"; link.textContent = "Открыть письмо";
+        line.append(" · ", link);
+      }
+      job.append(line);
+    }
     const fmt = td("fmtcell"); const wf = workFormat(v);
     if (wf === "не указан") { fmt.className = "fmtcell muted"; fmt.textContent = "не указан"; }
     else {
@@ -1158,6 +1281,12 @@ function renderRows() {
         box.append(cp);
       }
       box.append(statusCell(v));
+      if (statusOf(v) === "Новый") {
+        const apply = document.createElement("button");
+        apply.textContent = "Откликнуться";
+        apply.onclick = () => openApply(v);
+        box.append(apply);
+      }
       const back = document.createElement("button");
       back.className = "ghost"; back.innerHTML = TRASH_SVG;
       // ручную запись возвращать некуда — её нет в ленте вакансий, только удалять
@@ -1178,15 +1307,18 @@ function renderRows() {
     {
       const box = document.createElement("div"); box.className = "row-actions";
       if (view === "new") {
+        const send = document.createElement("button");
+        send.textContent = "Откликнуться";
+        send.onclick = () => openApply(v);
         const apply = document.createElement("button");
-        apply.textContent = "В отклики";
-        apply.title = "Перенести в отклики";
-        apply.onclick = () => setStatus(v, "Новый", "В откликах");
+        apply.textContent = "Сохранить";
+        apply.title = "Сохранить для отклика позже";
+        apply.onclick = () => setStatus(v, "Новый", "Сохранено");
         const hide = document.createElement("button");
         hide.className = "ghost"; hide.innerHTML = EYEOFF_SVG;
         hide.title = "Скрыть вакансию";
         hide.onclick = () => setStatus(v, "Скрыта", "Скрыто");
-        box.append(apply, hide);
+        box.append(send, apply, hide);
       } else {
         const back = document.createElement("button");
         back.textContent = "Вернуть";
@@ -1251,12 +1383,29 @@ window.addEventListener("resize", updateFeedShadows);
 
 function renderMain() { renderTabs(); renderRows(); }
 
+function renderProfileSwitch() {
+  const select = $("profile-switch"); select.textContent = "";
+  for (const profile of state.profiles || []) {
+    const option = document.createElement("option");
+    option.value = profile.id; option.textContent = profile.name;
+    select.append(option);
+  }
+  select.value = state.activeProfile?.id || "main";
+}
+
+function renderSalary() {
+  $("salary-min").value = state.salary?.minNetRub || 0;
+  $("salary-unknown").checked = state.salary?.includeUnknown !== false;
+}
+
 function render() {
+  renderProfileSwitch();
   renderLevels();
   renderWords("stopwords", state.stopwords);
   renderPresets();
   renderSources();
   renderWFormats();
+  renderSalary();
   renderPeriods();
   renderMain();
 }
@@ -1279,6 +1428,13 @@ async function load() {
   const data = await r.json();
   if (data.needsSetup) { $("setup").hidden = false; return; }
   state = data;
+  sessionStorage.setItem("sasakiProfile", data.activeProfile?.id || "main");
+  renderSalary();
+  PRESETS = data.activeProfile?.kind === "marketing" ? MARKETING_PRESETS
+    : data.activeProfile?.kind === "custom" ? [] : ENGINEERING_PRESETS;
+  view = localStorage.getItem(storageKey("view")) || "new";
+  periodDays = Number(localStorage.getItem(storageKey("periodDays"))) || 180;
+  hiddenFormats.clear();
   // отмеченные направления: своё поле конфига; для старых конфигов — те
   // пресеты, что уже лежат в плоских keywords
   dirs = new Set((data.directions || []).length
@@ -1290,7 +1446,7 @@ async function load() {
       if (data.formats.includes(canon)) hiddenFormats.delete(label);
       else hiddenFormats.add(label);
     }
-    localStorage.setItem("hiddenFormats", JSON.stringify([...hiddenFormats]));
+    localStorage.setItem(storageKey("hiddenFormats"), JSON.stringify([...hiddenFormats]));
   }
   // критерии ещё не выбирали — вместо ленты показываем экран первого запуска
   if (!data.onboarded) { renderOnboard(); $("onboard").hidden = false; return; }
@@ -1323,7 +1479,8 @@ async function save() {
   const formats = Object.entries(FMT_CANON)
     .filter(([label]) => !hiddenFormats.has(label))
     .map(([, canon]) => canon);
-  const r = await fetch("/api/config", {
+  let r;
+  try { r = await fetch("/api/config", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({
       // любое сохранение критериев означает, что экран первого запуска пройден
@@ -1333,18 +1490,21 @@ async function save() {
       levels,
       grades,
       formats: formats.length === WORK_FORMATS.length ? [] : formats,
+      salary: { minNetRub: Number($("salary-min").value) || 0,
+        includeUnknown: $("salary-unknown").checked },
       sources: Object.fromEntries(state.sources.map((s) => [s.name, s.enabled])),
       tgDisabled: (state.tgChannels || []).filter((c) => !c.enabled).map((c) => c.name),
       directions: [...dirs],
     }),
-  });
-  if (!r.ok) { toast("Ошибка сохранения"); return; }
+  }); } catch { toast("Сервер недоступен"); return false; }
+  if (!r.ok) { toast("Ошибка сохранения"); return false; }
   // лента фильтруется текущими критериями на сервере — перечитываем сразу,
   // чтобы смена галочек отражалась без перезагрузки страницы
   try {
     const st = await (await fetch("/api/state")).json();
     if (st.jobs) { state.jobs = st.jobs; renderMain(); }
   } catch { /* не критично: лента обновится при следующей загрузке */ }
+  return true;
 }
 
 // подпись этапа прогона по текущему источнику — коротко, в одну строку
@@ -1454,7 +1614,7 @@ const today = () => {
 function openAdd() {
   fillSelect("f-level", LEVELS, "", "не указан");
   fillSelect("f-format", ["удалённо", "гибрид", "офис"], "", "не указан");
-  fillSelect("f-status", STATUSES, "Новый");
+  fillSelect("f-status", STATUSES, "Отклик");
   ["f-title", "f-company", "f-url", "f-letter"].forEach((id) => ($(id).value = ""));
   $("f-date").value = today();
   $("add-err").hidden = true;
@@ -1511,7 +1671,7 @@ async function saveAdd() {
     const data = await r.json();
     if (!r.ok) { err.textContent = data.error || "Не удалось сохранить"; err.hidden = false; return; }
     state.jobs = data.jobs || state.jobs;
-    view = "applied"; localStorage.setItem("view", view); // сразу показать, куда легло
+    view = "applied"; localStorage.setItem(storageKey("view"), view); // сразу показать, куда легло
     closeAdd(); renderMain();
     toast("Отклик добавлен");
   } catch {
@@ -1526,8 +1686,235 @@ $("add-close").onclick = closeAdd;
 $("add-back").onclick = closeAdd;
 $("add-save").onclick = saveAdd;
 $("f-date").addEventListener("input", maskDate);
+
+const PROFILE_FIELDS = {
+  firstName: "p-first", lastName: "p-last", middleName: "p-middle",
+  email: "p-email", phone: "p-phone", telegram: "p-telegram", city: "p-city",
+};
+
+async function flushPendingSettings() {
+  if (saveInFlight && !(await saveInFlight)) return false;
+  if (saveTimer) {
+    clearTimeout(saveTimer); saveTimer = null;
+    saveInFlight = save();
+    return await saveInFlight;
+  }
+  return true;
+}
+
+$("profile-switch").onchange = async () => {
+  const select = $("profile-switch"), id = select.value;
+  select.disabled = true;
+  try {
+    if (!await flushPendingSettings()) throw new Error("Сначала сохрани настройки поиска");
+    const r = await fetch("/api/profiles/select", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Не удалось переключить профиль");
+    sessionStorage.setItem("sasakiProfile", data.profile.id);
+    location.reload();
+  } catch (e) {
+    select.value = state.activeProfile?.id || "main";
+    toast(e.message);
+    select.disabled = false;
+  }
+};
+
+function closeProfileCreate() {
+  $("profile-create-back").hidden = true; $("profile-create-drawer").hidden = true;
+}
+$("profile-create-open").onclick = () => {
+  $("profile-create-name").value = "";
+  $("profile-create-kind").value = "marketing";
+  $("profile-create-error").hidden = true;
+  $("profile-create-back").hidden = false; $("profile-create-drawer").hidden = false;
+  $("profile-create-name").focus();
+};
+$("profile-create-close").onclick = closeProfileCreate;
+$("profile-create-back").onclick = closeProfileCreate;
+$("profile-create-save").onclick = async () => {
+  const button = $("profile-create-save"), error = $("profile-create-error");
+  button.disabled = true; error.hidden = true;
+  try {
+    if (!await flushPendingSettings()) throw new Error("Сначала сохрани настройки поиска");
+    const r = await fetch("/api/profiles", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: $("profile-create-name").value, kind: $("profile-create-kind").value }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Не удалось создать профиль");
+    sessionStorage.setItem("sasakiProfile", data.profile.id);
+    location.reload();
+  } catch (e) { error.textContent = e.message; error.hidden = false; button.disabled = false; }
+};
+
+$("salary-min").onchange = markDirty;
+$("salary-unknown").onchange = markDirty;
+
+async function openMail() {
+  const r = await fetch("/api/mail");
+  const data = await r.json();
+  $("mail-sync").textContent = state.activeProfile?.id !== "main"
+    ? "Gmail подключен только к основному профилю. Для этого профиля письма пока не проверяются."
+    : data.sync?.at
+    ? `Последняя проверка: ${new Date(data.sync.at).toLocaleString("ru-RU")}. Письма HH не учитываются.`
+    : "Gmail еще не проверялся.";
+  const list = $("mail-list"); list.textContent = "";
+  if (!data.events?.length) list.textContent = "Писем о стадиях пока нет.";
+  for (const e of [...(data.events || [])].sort((a, b) => Date.parse(b.date) - Date.parse(a.date))) {
+    const card = document.createElement("div"); card.className = "fld";
+    const title = document.createElement("strong");
+    title.textContent = `${e.company} · ${e.stage}${e.title ? ` · ${e.title}` : ""}`;
+    const note = document.createElement("p"); note.className = "note";
+    note.textContent = `${new Date(e.date).toLocaleString("ru-RU")} · ${e.subject} · ${e.job ? "Привязано к вакансии" : "Вакансия не определена"}`;
+    card.append(title, note);
+    if (/^https:\/\/mail\.google\.com\//.test(e.url || "")) {
+      const link = document.createElement("a"); link.href = e.url;
+      link.target = "_blank"; link.rel = "noopener"; link.textContent = "Открыть письмо";
+      card.append(link);
+    }
+    list.append(card);
+  }
+  $("mail-back").hidden = false; $("mail-drawer").hidden = false;
+}
+
+function closeMail() { $("mail-back").hidden = true; $("mail-drawer").hidden = true; }
+
+async function openProfile() {
+  const r = await fetch("/api/profile");
+  const profile = await r.json();
+  $("profile-title").textContent = `Профиль: ${state.activeProfile?.name || "Кандидат"}`;
+  for (const [field, id] of Object.entries(PROFILE_FIELDS)) $(id).value = profile[field] || "";
+  $("p-resume").value = "";
+  $("p-resume-info").textContent = profile.resume
+    ? `${profile.resume.name} · ${Math.round(profile.resume.size / 1024)} КБ` : "PDF еще не загружен";
+  $("p-err").hidden = true;
+  $("profile-back").hidden = false; $("profile-drawer").hidden = false;
+}
+
+function closeProfile() { $("profile-back").hidden = true; $("profile-drawer").hidden = true; }
+
+async function saveCandidateProfile() {
+  const btn = $("profile-save"), err = $("p-err");
+  btn.disabled = true; err.hidden = true;
+  try {
+    const fields = Object.fromEntries(Object.entries(PROFILE_FIELDS).map(([field, id]) => [field, $(id).value]));
+    let r = await fetch("/api/profile", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(fields),
+    });
+    let data = await r.json();
+    if (!r.ok) throw new Error(data.error);
+    const file = $("p-resume").files[0];
+    if (file) {
+      r = await fetch("/api/profile/resume", {
+        method: "POST", headers: { "content-type": "application/pdf", "x-filename": encodeURIComponent(file.name) },
+        body: file,
+      });
+      data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+    }
+    closeProfile(); toast("Профиль сохранен");
+  } catch (e) { err.textContent = e.message || "Не удалось сохранить"; err.hidden = false; }
+  finally { btn.disabled = false; }
+}
+
+let applyingJob = null;
+let applyPrepared = false;
+function closeApply() {
+  $("apply-back").hidden = true; $("apply-drawer").hidden = true;
+  if (applyPrepared && applyingJob) {
+    fetch("/api/apply/close", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: applyingJob.source, id: applyingJob.id }) }).catch(() => {});
+  }
+  applyPrepared = false; applyingJob = null;
+}
+
+function openApply(job) {
+  applyingJob = job; applyPrepared = false;
+  $("apply-title").textContent = `${job.title} · ${companyOf(job) || "Компания не указана"}`;
+  $("apply-info").textContent = job.canApply
+    ? "Пульт заполнит форму и загрузит PDF в открытом окне Chrome. Проверь данные и обязательные согласия на сайте. Затем отправь отклик здесь."
+    : "Для этого сайта автоматическая отправка пока недоступна. Открой вакансию, отправь отклик на сайте и подтверди это здесь.";
+  $("apply-progress").textContent = "";
+  $("apply-consent").checked = false;
+  $("apply-prepare").hidden = !job.canApply;
+  $("apply-send").hidden = true;
+  $("apply-send").textContent = "Отправить отклик";
+  $("apply-confirm").hidden = !!job.canApply;
+  $("apply-back").hidden = false; $("apply-drawer").hidden = false;
+}
+
+async function applyRequest(action) {
+  const r = await fetch(`/api/apply/${action}`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source: applyingJob.source, id: applyingJob.id }),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || "Ошибка отправки");
+  return data;
+}
+
+$("profile-open").onclick = openProfile;
+$("mail-open").onclick = openMail;
+$("mail-close").onclick = closeMail;
+$("mail-back").onclick = closeMail;
+$("profile-close").onclick = closeProfile;
+$("profile-back").onclick = closeProfile;
+$("profile-save").onclick = saveCandidateProfile;
+$("apply-close").onclick = closeApply;
+$("apply-back").onclick = closeApply;
+$("apply-site").onclick = () => {
+  const url = applyingJob?.applyUrl || applyingJob?.url;
+  if (/^https?:\/\//i.test(url || "")) window.open(url, "_blank", "noopener");
+};
+$("apply-prepare").onclick = async () => {
+  const btn = $("apply-prepare"); btn.disabled = true;
+  $("apply-progress").textContent = "Открываю сайт и заполняю форму...";
+  try {
+    const data = await applyRequest("prepare");
+    applyPrepared = true;
+    $("apply-progress").textContent = data.ready
+      ? "Форма заполнена. Проверь ее в Chrome и отметь обязательные согласия."
+      : `Проверь поля на сайте: ${data.missing.join(", ")}`;
+    $("apply-send").hidden = false;
+  } catch (e) {
+    $("apply-progress").textContent = e.message;
+    if (/Заполните профиль/.test(e.message)) { closeApply(); openProfile(); }
+  } finally { btn.disabled = false; }
+};
+$("apply-send").onclick = async () => {
+  if (!$("apply-consent").checked) { toast("Проверь данные и согласия на сайте"); return; }
+  const btn = $("apply-send"); btn.disabled = true;
+  $("apply-progress").textContent = "Отправляю отклик...";
+  try {
+    const data = await applyRequest("send");
+    if (data.jobs) state.jobs = data.jobs;
+    if (data.confirmed) { closeApply(); renderMain(); toast("Отклик отправлен"); }
+    else {
+      $("apply-progress").textContent = data.message;
+      $("apply-confirm").hidden = false;
+      btn.hidden = !data.retryable;
+      if (data.retryable) btn.textContent = "Повторить отправку";
+    }
+  } catch (e) { $("apply-progress").textContent = e.message; }
+  finally { btn.disabled = false; }
+};
+$("apply-confirm").onclick = async () => {
+  if (!$("apply-consent").checked) { toast("Подтверди отправку на сайте"); return; }
+  try {
+    const data = await applyRequest("confirm");
+    state.jobs = data.jobs || state.jobs;
+    closeApply(); renderMain(); toast("Отклик учтен");
+  } catch (e) { $("apply-progress").textContent = e.message; }
+};
+
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("add-drawer").hidden) closeAdd();
+  if (e.key === "Escape" && !$("profile-drawer").hidden) closeProfile();
+  if (e.key === "Escape" && !$("profile-create-drawer").hidden) closeProfileCreate();
+  if (e.key === "Escape" && !$("mail-drawer").hidden) closeMail();
+  if (e.key === "Escape" && !$("apply-drawer").hidden) closeApply();
 });
 
 $("run").onclick = run;

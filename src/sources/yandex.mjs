@@ -3,13 +3,14 @@
 // /api/publications/<id> (published_at); добываем её только для новых id
 // через кэш data/pub-dates.json (см. lib/pubdates.mjs).
 import { withPubDates } from "../lib/pubdates.mjs";
+import { matches } from "../lib/filter.mjs";
 
 const API = "https://yandex.ru/jobs/api/publications";
 const MAX_PAGES = 20;
 const UA = { "User-Agent": "Mozilla/5.0 (Macintosh) sasaki-agent/0.1" };
 
 export async function fetchYandex(cfg) {
-  const professions = cfg.yandex?.professions || ["designer-uxui", "designer"];
+  const professions = cfg.yandex?.professions || ["backend-developer", "ml-developer", "ml-researcher", "information-security"];
   const base = professions.map((p) => `professions=${encodeURIComponent(p)}`).join("&");
   const out = [];
   let cursor = null;
@@ -39,7 +40,9 @@ export async function fetchYandex(cfg) {
     if (!cursor) break;
     await new Promise((r) => setTimeout(r, 300));
   }
-  return withPubDates("yandex", out, async (item) => {
+  // Дата требует отдельного запроса. Не ходим за ней для посторонних ролей.
+  const relevant = out.filter((item) => matches(item.title, cfg));
+  return withPubDates("yandex", relevant, async (item) => {
     const res = await fetch(`${API}/${item.id}`, { headers: UA });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()).published_at || ""; // "2026-07-17"

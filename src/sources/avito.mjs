@@ -3,12 +3,13 @@
 // (JSON-LD "datePosted"); добываем её только для новых id через кэш
 // data/pub-dates.json (см. lib/pubdates.mjs).
 import { withPubDates } from "../lib/pubdates.mjs";
+import { matches } from "../lib/filter.mjs";
 
 const API = "https://career.avito.com/vacancies/";
 const UA = { "User-Agent": "Mozilla/5.0 (Macintosh) sasaki-agent/0.1" };
 
 export async function fetchAvito(cfg) {
-  const directions = cfg.avito?.directions || ["dizayn"];
+  const directions = cfg.avito?.directions || ["razrabotka", "data-science", "informatsionnaya-bezopasnost"];
   const byId = new Map();
   for (const dir of directions) {
     const res = await fetch(`${API}?q=&action=filter&direction=${encodeURIComponent(dir)}`, {
@@ -38,7 +39,8 @@ export async function fetchAvito(cfg) {
     }
     await new Promise((r) => setTimeout(r, 300));
   }
-  return withPubDates("avito", [...byId.values()], async (item) => {
+  const relevant = [...byId.values()].filter((item) => matches(item.title, cfg));
+  return withPubDates("avito", relevant, async (item) => {
     const res = await fetch(item.url, { headers: UA });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();

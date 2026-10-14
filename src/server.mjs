@@ -7,8 +7,14 @@ import { readFileSync, writeFileSync, watch } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnv, projectRoot } from "./lib/env.mjs";
+import { DEFAULT_PROFILE_ID, listProfiles, getProfile, createProfile, withProfile,
+  currentProfileId, profileConfigPath } from "./lib/profiles.mjs";
 import { loadJobs, setJobStatus, setJobLetter, addJob, deleteJob } from "./lib/state.mjs";
 import { inferGrades, matchesItem } from "./lib/filter.mjs";
+import { companyApplicationCounts, companyKey } from "./lib/companies.mjs";
+import { loadProfile, saveProfile, saveResume } from "./lib/profile.mjs";
+import { canApply, prepareApplication, sendApplication, closeApplication } from "./lib/apply.mjs";
+import { loadMailEvents, loadMailSync } from "./lib/mail.mjs";
 import { discoverSources } from "./lib/registry.mjs";
 import { telegramConfigured } from "./lib/telegram.mjs";
 import { runPipeline } from "./lib/run.mjs";
@@ -18,7 +24,6 @@ loadEnv();
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.PORT) || 4321;
 const uiDir = join(dirname(fileURLToPath(import.meta.url)), "ui");
-const configPath = join(projectRoot, "config.json");
 
 // Воронка трекинга откликов (порядок = порядок в выпадашке статуса).
 // Вне воронки: «Новая» (в ленте вакансий, статус по умолчанию) и «Скрыта»
@@ -30,9 +35,14 @@ const ALL_STATUSES = ["Новая", "Скрыта", ...STATUSES];
 // соответствия конфигу — UI скрывает не подходящие, не удаляя их из архива.
 // Снял галочку направления → его находки ушли из ленты; вернул — вернулись.
 function withStatus(jobs, cfg) {
+  const counts = companyApplicationCounts(jobs);
   return jobs.map((j) => {
     const status = j.status || "Новая";
     const rec = { ...j, status };
+    // Старые записи getmatch могли сохранить только пометку о налогах без суммы.
+    if (/^(?:на руки|до вычета налогов)$/.test(String(rec.salary || "").trim())) rec.salary = "";
+    rec.companyAppliedCount = counts.get(companyKey(j.company)) || 0;
+    rec.canApply = canApply(j);
     // ручное под критерии не проверяем: пользователь завёл запись сам, она не
     // должна пропадать из ленты из-за несовпадения с keywords
     if (cfg && status === "Новая" && j.source !== "manual") rec.matchesNow = matchesItem(j, cfg);
@@ -41,7 +51,20 @@ function withStatus(jobs, cfg) {
 }
 
 function loadConfig() {
-  return JSON.parse(readFileSync(configPath, "utf8"));
+  return JSON.parse(readFileSync(profileConfigPath(), "utf8"));
+}
+
+function cookieProfile(req) {
+  const requested = String(req.headers["x-sasaki-profile"] || "");
+  if (getProfile(requested)) return requested;
+  const raw = String(req.headers.cookie || "").match(/(?:^|;\s*)sasaki_profile=([^;]+)/)?.[1] || "";
+  let id = "";
+  try { id = decodeURIComponent(raw); } catch { /* неверная cookie */ }
+  return getProfile(id)?.id || DEFAULT_PROFILE_ID;
+}
+
+function selectCookie(res, id) {
+  res.setHeader("set-cookie", `sasaki_profile=${encodeURIComponent(id)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`);
 }
 
 // --- уровни (лестница грейдов) ----------------------------------------------
@@ -55,12 +78,7 @@ const GRADE_TO_LEVEL = {
   lead: "lead", staff: "senior", principal: "head", head: "head", director: "head",
 };
 const LEVEL_DEFAULT_KEYWORDS = {
-  intern: ["стажер дизайнер", "стажер ux", "стажер ui", "дизайн стажировка", "design intern"],
-  junior: ["джуниор дизайнер", "младший дизайнер", "начинающий дизайнер", "junior ux", "junior ui", "junior designer"],
-  middle: ["мидл дизайнер", "middle ux", "middle ui", "middle designer", "middle product designer"],
-  senior: ["старший дизайнер", "senior ux", "senior ui", "senior designer", "senior product designer"],
-  lead: ["дизайн лид", "лид дизайнер", "ведущий дизайнер", "главный дизайнер", "lead ux", "design lead", "lead product designer"],
-  head: ["руководитель дизайна", "дизайн директор", "head of design", "design director", "арт-директор"],
+  intern: [], junior: [], middle: [], senior: [], lead: [], head: [],
 };
 
 function levelsFor(cfg) {
@@ -93,6 +111,20 @@ function readBody(req) {
       if (data.length > 1e6) reject(new Error("тело запроса слишком большое"));
     });
     req.on("end", () => resolve(data));
+    req.on("error", reject);
+  });
+}
+
+function readBinary(req, max = 8 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const parts = [];
+    let size = 0, tooLarge = false;
+    req.on("data", (part) => {
+      size += part.length;
+      if (size > max) tooLarge = true;
+      else parts.push(part);
+    });
+    req.on("end", () => tooLarge ? reject(new Error("PDF слишком большой")) : resolve(Buffer.concat(parts)));
     req.on("error", reject);
   });
 }
@@ -153,15 +185,46 @@ function applyConfigPatch(current, patch, knownSources) {
     if (bad.length) throw new Error(`formats: неизвестные форматы: ${bad.join(", ")}`);
     next.formats = list;
   }
+  if ("salary" in patch) {
+    const minNetRub = Number(patch.salary?.minNetRub);
+    if (!Number.isFinite(minNetRub) || minNetRub < 0 || minNetRub > 100_000_000) {
+      throw new Error("salary.minNetRub: ожидается сумма от 0 до 100 млн рублей");
+    }
+    next.salary = { minNetRub, includeUnknown: patch.salary?.includeUnknown !== false };
+  }
   return next;
 }
 
-let running = false;
-let currentLog = [];    // лог идущего/последнего прогона — для /api/progress
-let sourcesTotal = 0;   // сколько источников включено в идущем прогоне
+const runs = new Map(); // отдельный прогресс поиска для каждого профиля
 
 async function handle(req, res) {
   const url = new URL(req.url, `http://${HOST}`);
+
+  if (req.method === "POST" && req.headers.origin &&
+      req.headers.origin !== `http://${HOST}:${PORT}`) {
+    return json(res, 403, { error: "Запрос не из локального пульта" });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/profiles") {
+    return json(res, 200, { profiles: listProfiles(), activeProfile: getProfile(currentProfileId()) });
+  }
+  if (req.method === "POST" && url.pathname === "/api/profiles") {
+    try {
+      const created = createProfile(JSON.parse(await readBody(req)));
+      selectCookie(res, created.id);
+      return json(res, 200, { profile: created, profiles: listProfiles() });
+    } catch (e) { return json(res, 400, { error: e.message }); }
+  }
+  if (req.method === "POST" && url.pathname === "/api/profiles/select") {
+    try {
+      const { id } = JSON.parse(await readBody(req));
+      const selected = getProfile(id);
+      if (!selected) return json(res, 404, { error: "Профиль не найден" });
+      await closeApplication();
+      selectCookie(res, selected.id);
+      return json(res, 200, { profile: selected });
+    } catch (e) { return json(res, 400, { error: e.message }); }
+  }
 
   // --- статика (одна страница) ---------------------------------------------
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
@@ -197,13 +260,56 @@ async function handle(req, res) {
       directions: cfg.directions || [],
       stopwords: cfg.stopwords || [],
       formats: cfg.formats || [],
+      salary: cfg.salary || { minNetRub: 0, includeUnknown: true },
       levels: levelsFor(cfg),
       sources,
       tgChannels,
       statuses: STATUSES,
       telegramConfigured: telegramConfigured(),
+      profiles: listProfiles(),
+      activeProfile: getProfile(currentProfileId()),
       jobs: withStatus(loadJobs(), cfg),
     });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/profile") {
+    return json(res, 200, loadProfile());
+  }
+  if (req.method === "GET" && url.pathname === "/api/mail") {
+    return json(res, 200, { events: loadMailEvents(), sync: loadMailSync() });
+  }
+  if (req.method === "POST" && url.pathname === "/api/profile") {
+    try { return json(res, 200, saveProfile(JSON.parse(await readBody(req)))); }
+    catch (e) { return json(res, 400, { error: e.message }); }
+  }
+  if (req.method === "POST" && url.pathname === "/api/profile/resume") {
+    try {
+      const name = decodeURIComponent(req.headers["x-filename"] || "resume.pdf");
+      return json(res, 200, saveResume(await readBinary(req), name));
+    } catch (e) { return json(res, 400, { error: e.message }); }
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/apply/")) {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const job = loadJobs().find((j) => j.source === body.source && String(j.id) === String(body.id));
+      if (!job) return json(res, 404, { error: "Вакансия не найдена" });
+      if (url.pathname === "/api/apply/prepare") return json(res, 200, await prepareApplication(job));
+      if (url.pathname === "/api/apply/send") {
+        const result = await sendApplication(job.source, job.id);
+        if (result.confirmed) setJobStatus(job.source, job.id, "Отклик");
+        return json(res, 200, { ...result, jobs: withStatus(loadJobs(), loadConfig()) });
+      }
+      if (url.pathname === "/api/apply/confirm") {
+        setJobStatus(job.source, job.id, "Отклик");
+        await closeApplication();
+        return json(res, 200, { ok: true, jobs: withStatus(loadJobs(), loadConfig()) });
+      }
+      if (url.pathname === "/api/apply/close") {
+        await closeApplication();
+        return json(res, 200, { ok: true });
+      }
+    } catch (e) { return json(res, 400, { error: e.message }); }
   }
 
   // --- сохранить критерии/тумблеры -----------------------------------------
@@ -227,7 +333,7 @@ async function handle(req, res) {
     } catch (e) {
       return json(res, 400, { error: e.message });
     }
-    writeFileSync(configPath, JSON.stringify(next, null, 2) + "\n");
+    writeFileSync(profileConfigPath(), JSON.stringify(next, null, 2) + "\n");
     return json(res, 200, { ok: true });
   }
 
@@ -243,7 +349,9 @@ async function handle(req, res) {
       return json(res, 400, { error: "неизвестный статус" });
     }
     const ok = setJobStatus(body.source, body.id, body.status);
-    return json(res, ok ? 200 : 404, ok ? { ok: true } : { error: "вакансия не найдена" });
+    return json(res, ok ? 200 : 404, ok
+      ? { ok: true, jobs: withStatus(loadJobs(), loadConfig()) }
+      : { error: "вакансия не найдена" });
   }
 
   // --- добавить отклик вручную ----------------------------------------------
@@ -332,25 +440,29 @@ async function handle(req, res) {
 
   // --- живой прогресс текущего прогона (поллится кнопкой в пульте) ----------
   if (req.method === "GET" && url.pathname === "/api/progress") {
-    return json(res, 200, { running, log: currentLog, total: sourcesTotal });
+    return json(res, 200, runs.get(currentProfileId()) || { running: false, log: [], total: 0 });
   }
 
   // --- прогнать сбор сейчас -------------------------------------------------
   if (req.method === "POST" && url.pathname === "/api/run") {
-    if (running) return json(res, 409, { error: "прогон уже идёт" });
-    running = true;
+    const id = currentProfileId();
+    if (runs.get(id)?.running) return json(res, 409, { error: "прогон уже идет" });
     const log = [];
-    currentLog = log;
+    const progress = { running: true, log, total: 0 };
+    runs.set(id, progress);
     try {
       const cfg = loadConfig();
-      sourcesTotal = (await discoverSources())
+      if (!cfg.directions?.length && !cfg.keywords?.length) {
+        return json(res, 400, { error: "Добавь направление поиска" });
+      }
+      progress.total = (await discoverSources())
         .filter((s) => cfg.sources?.[s.name] !== false).length;
       const { fresh, errors } = await runPipeline(cfg, { onLog: (m) => log.push(m) });
       return json(res, 200, { found: fresh.length, errors, log, jobs: withStatus(loadJobs(), cfg) });
     } catch (e) {
       return json(res, 500, { error: e.message, log });
     } finally {
-      running = false;
+      progress.running = false;
     }
   }
 
@@ -358,7 +470,10 @@ async function handle(req, res) {
 }
 
 const server = createServer((req, res) => {
-  handle(req, res).catch((e) => json(res, 500, { error: e.message }));
+  try {
+    withProfile(cookieProfile(req), () => handle(req, res))
+      .catch((e) => json(res, 500, { error: e.message }));
+  } catch (e) { json(res, 500, { error: e.message }); }
 });
 
 server.on("error", (e) => {

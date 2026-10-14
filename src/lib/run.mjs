@@ -4,6 +4,7 @@ import { matchesItem, structuralOk, dedupeByTarget, targetKey, textKey } from ".
 import { loadSeen, saveSeen, appendJobs, pruneJobs } from "./state.mjs";
 import { sendTelegram, telegramConfigured, escapeHtml } from "./telegram.mjs";
 import { discoverSources, discoverDeliverers } from "./registry.mjs";
+import { currentProfileId, DEFAULT_PROFILE_ID } from "./profiles.mjs";
 
 // Сетевые сбои у сайтов-источников случаются: у части из них перед бэкендом
 // стоит защита, которая иногда не принимает соединение (UND_ERR_CONNECT_TIMEOUT),
@@ -50,7 +51,12 @@ export async function runPipeline(cfg, { onLog = console.log } = {}) {
   const seen = loadSeen();
   // prefiltered-источники сматчили ключевые слова сами (по полному тексту),
   // но структурные срезы — грейд/область/формат/тип найма — применяем и к ним
-  const matched = all.filter((v) => (v.prefiltered ? structuralOk(v, cfg) : matchesItem(v, cfg)));
+  const cutoff = cfg.retentionDays > 0 ? Date.now() - cfg.retentionDays * 86_400_000 : 0;
+  const matched = all.filter((v) => {
+    const published = Date.parse(v.published || "");
+    if (cutoff && Number.isFinite(published) && published < cutoff) return false;
+    return v.prefiltered ? structuralOk(v, cfg) : matchesItem(v, cfg);
+  });
   // межисточниковый дедуп: одна вакансия из телеги и из прямого источника — одна
   const deduped = dedupeByTarget(matched);
   const fresh = deduped.filter(
@@ -104,7 +110,7 @@ export async function runPipeline(cfg, { onLog = console.log } = {}) {
       }
       saveSeen(seen);
     }
-  } else if (errors.length && telegramConfigured()) {
+  } else if (errors.length && currentProfileId() === DEFAULT_PROFILE_ID && telegramConfigured()) {
     // вакансий нет, но были сбои источников — сообщим, чтобы не молчать при поломке
     await sendTelegram(`⚠️ sasaki-agent: сбои источников\n${errors.map(escapeHtml).join("\n")}`).catch(() => {});
   }

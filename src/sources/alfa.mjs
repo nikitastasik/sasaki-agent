@@ -1,21 +1,21 @@
-// Альфа-Банк: открытый JSON API. businessLine 1011 = «Дизайн» (фильтр с их сайта).
+// Альфа-Банк: открытый JSON API, текстовый поиск по названию.
 const API = "https://job.alfabank.ru/api/vacancies";
 const PAGE = 100;
 const MAX_PAGES = 5;
 
 export async function fetchAlfa(cfg) {
-  const lines = cfg.alfa?.businessLines || ["1011"];
-  const out = [];
-  for (const line of lines) {
+  const queries = cfg.alfa?.queries || ["Python", "ML", "MLOps"];
+  const out = new Map();
+  for (const text of queries) {
     for (let page = 0; page < MAX_PAGES; page++) {
-      const url = `${API}?businessLine=${line}&take=${PAGE}&skip=${page * PAGE}`;
+      const url = `${API}?${new URLSearchParams({ text, take: String(PAGE), skip: String(page * PAGE) })}`;
       const res = await fetch(url, {
         headers: { "User-Agent": "Mozilla/5.0 (Macintosh) sasaki-agent/0.1" },
       });
       if (!res.ok) throw new Error(`Альфа HTTP ${res.status}`);
       const json = await res.json();
       for (const v of json.items || []) {
-        out.push({
+        out.set(String(v.id), {
           source: "alfa",
           id: String(v.id),
           title: v.name,
@@ -30,7 +30,7 @@ export async function fetchAlfa(cfg) {
       await new Promise((r) => setTimeout(r, 300));
     }
   }
-  return out;
+  return [...out.values()];
 }
 
 // Структурного поля формата у API нет: город берём из слага, формат работы

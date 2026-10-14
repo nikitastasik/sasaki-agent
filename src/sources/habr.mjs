@@ -4,10 +4,11 @@ const RSS_URL = "https://career.habr.com/vacancies/rss";
 export async function fetchHabr(cfg) {
   const byId = new Map();
   const remoteIds = new Set();
+  const queries = cfg.habr?.queries || cfg.keywords || [];
   // второй проход с remote=true — RSS формата работы не отдаёт, поэтому
   // удалёнку вычисляем разницей выдач и кладём в location для фильтра «Формат»
   for (const remote of [false, true]) {
-    for (const kw of cfg.keywords) {
+    for (const kw of queries) {
       const qs = `q=${encodeURIComponent(kw)}&type=all${remote ? "&remote=true" : ""}`;
       const res = await fetch(`${RSS_URL}?${qs}`, {
         headers: { "User-Agent": "Mozilla/5.0 (Macintosh) sasaki-agent/0.1" },

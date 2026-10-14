@@ -1,3 +1,5 @@
+import { salaryOk } from "./salary.mjs";
+
 // Нормализация: нижний регистр, ё→е, дефисы/слэши → пробел.
 function normalize(s) {
   return (s || "")
@@ -44,7 +46,9 @@ const SYNONYM_PAIRS = [
   // чужие профессии — нужны, чтобы СТОП-слова работали на обоих языках
   ["аналитик", "analyst"], ["разработчик", "developer"],
   ["инженер", "engineer"], ["тестировщик", "qa"],
-  ["маркетолог", "marketer"], ["рекрутер", "recruiter"],
+  ["маркетолог", "marketer"], ["маркетолог", "marketing"], ["рекрутер", "recruiter"],
+  ["бэкенд", "backend"], ["бекенд", "backend"],
+  ["питон", "python"],
 ];
 
 const SYNONYMS = new Map();
@@ -80,7 +84,12 @@ function wordHits(w, v) {
 // среди слов заголовка: «дизайн лид» найдёт и «Продуктовый дизайн-лидер»
 // (дефисы нормализация режет в пробелы), и «Design Lead».
 function keywordMatches(titleWords, keyword) {
-  return normalize(keyword)
+  const phrase = normalize(keyword);
+  if (phrase === "ai инженер") {
+    const title = titleWords.join(" ");
+    return /(?:^| )ai (?:engineer|инженер)(?: |$)|(?:^| )(?:engineer|инженер) ai(?: |$)/.test(title);
+  }
+  return phrase
     .split(" ")
     .every((kw) => variants(kw).some((v) => titleWords.some((w) => wordHits(w, v))));
 }
@@ -232,7 +241,7 @@ function areaOk(item, dirs) {
 
 // Разовые/неполные форматы найма: агент ищет постоянную работу — консультации,
 // парт-тайм и фриланс режем по явным словам заголовка.
-const GIG_RE = /consult|консульт|part[-\s]?time|парт[-\s]?тайм|фриланс|freelance|частичн\w{0,3}\s+занятост/i;
+const GIG_RE = /consult|консульт|part[-\s]?time|парт[-\s]?тайм|фриланс|freelance|проектн\w*\s+работ|project[-\s]?based|частичн\w{0,3}\s+занятост/i;
 function gigOk(item) {
   return !GIG_RE.test(item.title || "");
 }
@@ -266,6 +275,17 @@ function formatOk(item, formats) {
   return present.some((f) => formats.includes(f));
 }
 
+// Не предлагаем офис и гибрид в другом городе, если в конфиге задан домашний
+// город. Удаленные вакансии и записи без точного города оставляем на проверку.
+function locationOk(item, homeCities) {
+  if (!homeCities?.length) return true;
+  const loc = normalize(item.location);
+  if (!loc || /удален|remote|дистанц/.test(loc)) return true;
+  if (homeCities.some((city) => loc.includes(normalize(city)))) return true;
+  if (/^(россия|russia|worldwide|гибрид|hybrid|офис|office|не указан)$/.test(loc)) return true;
+  return false;
+}
+
 // Полная проверка вакансии: ключевые слова + стоп-слова + грейд + формат.
 //
 // Если выбраны направления (cfg.directions), роль определяется ЧИСТЫМ
@@ -290,7 +310,8 @@ export function matchesItem(item, cfg) {
 // область, формат и тип найма режутся по извлечённому заголовку здесь).
 export function structuralOk(item, cfg) {
   return gradeOk(item, cfg.grades) && formatOk(item, cfg.formats)
-    && areaOk(item, cfg.directions) && gigOk(item) && designRoleOk(item);
+    && locationOk(item, cfg.homeCities) && areaOk(item, cfg.directions)
+    && salaryOk(item, cfg.salary) && gigOk(item) && designRoleOk(item);
 }
 
 // Смежные с дизайном, но НЕ дизайнерские профессии. Под ключевое слово «senior

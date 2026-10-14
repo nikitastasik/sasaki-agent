@@ -1,5 +1,5 @@
 // Т-Банк: внутренний API карьерного сайта (найден через перехват в браузере).
-// POST getVacancies; pagination — объект по источникам ("it", "job", ...),
+// POST getVacancies; запрос pagination — объект по источникам ("it", "job", ...),
 // фильтр профессии — ключ вида tcareer_<category>_profession.
 const API = "https://www.tbank.ru/pfpjobs/papi/getVacancies";
 const PAGE = 50;
@@ -11,7 +11,7 @@ const GRADE_TAGS = new Set(["junior", "middle", "senior", "lead", "head"]);
 
 export async function fetchTbank(cfg) {
   const category = cfg.tbank?.category || "it";
-  const professions = cfg.tbank?.professions || ["design"];
+  const professions = cfg.tbank?.professions || ["backend", "ml", "security"];
   const out = [];
   let offset = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
@@ -24,7 +24,10 @@ export async function fetchTbank(cfg) {
       body: JSON.stringify({
         pagination: { [category]: { offset } },
         limit: PAGE,
-        filters: { category, [`tcareer_${category}_profession`]: professions },
+        filters: {
+          category,
+          ...(professions.length ? { [`tcareer_${category}_profession`]: professions } : {}),
+        },
       }),
     });
     if (!res.ok) throw new Error(`Т-Банк HTTP ${res.status}`);
@@ -48,7 +51,10 @@ export async function fetchTbank(cfg) {
         published: "",
       });
     }
-    const next = json.payload?.nextPagination?.[category];
+    // Ответ API сейчас содержит nextPagination напрямую. Старый формат
+    // содержал объект с ключом категории.
+    const pagination = json.payload?.nextPagination;
+    const next = pagination?.[category] || pagination;
     if (!next || next.isFinished || !json.payload?.vacancies?.length) break;
     offset = next.offset;
     await new Promise((r) => setTimeout(r, 300));

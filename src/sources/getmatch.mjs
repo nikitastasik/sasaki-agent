@@ -1,8 +1,6 @@
-// getmatch: открытый JSON API. Сужаем на сервере до дизайн-специализаций
-// (?sp=…) — getmatch классифицирует дизайн только как product_design и
-// ux_writer, дев-вакансий там тысячи. Грейд в списке не приходит, но есть в
-// детали вакансии (/api/offers/{id} → seniority) — добираем его штучно
-// (после сужения это ~десяток запросов, не 700). Итог фильтруется в collect.mjs.
+// Getmatch: фильтруем специализации на сервере, затем название локально.
+// Детали для грейда запрашиваем только у вакансий, подходящих по названию.
+import { matches } from "../lib/filter.mjs";
 const API = "https://getmatch.ru/api/offers";
 const PAGE = 100;
 const MAX_PAGES = 12;
@@ -10,8 +8,8 @@ const MAX_PAGES = 12;
 const SENIORITY = { intern: "intern", junior: "junior", middle: "middle", senior: "senior", lead: "lead", head: "head" };
 
 export async function fetchGetmatch(cfg) {
-  const specs = cfg.getmatch?.specializations || ["product_design", "ux_writer"];
-  const out = [];
+  const specs = cfg.getmatch?.specializations || ["python", "data_science", "information_security", "dev_ops"];
+  const out = new Map();
   for (const sp of specs) {
     for (let page = 0; page < MAX_PAGES; page++) {
       const res = await fetch(`${API}?limit=${PAGE}&offset=${page * PAGE}&sp=${encodeURIComponent(sp)}`, {
@@ -19,15 +17,17 @@ export async function fetchGetmatch(cfg) {
       });
       if (!res.ok) throw new Error(`getmatch HTTP ${res.status}`);
       const json = await res.json();
-      const levels = await enrichLevels(json.offers || []);
-      for (const o of json.offers || []) {
-        out.push({
+      const relevant = (json.offers || []).filter((o) => matches(o.position || "", cfg));
+      const levels = await enrichLevels(relevant);
+      for (const o of relevant) {
+        const salary = fmtSalary(o);
+        out.set(String(o.id), {
           source: "getmatch",
           id: String(o.id),
           title: o.position || "",
           company: o.company?.name || "",
           url: o.url?.startsWith("http") ? o.url : `https://getmatch.ru${o.url || ""}`,
-          salary: fmtSalary(o),
+          salary: salary ? salary + (o.salary_taxes === "gross" ? " до вычета налогов" : o.salary_taxes === "net" ? " на руки" : "") : "",
           location: fmtLocation(o.location_items),
           level: levels.get(o.id) || "",
           published: o.published_at,
@@ -37,7 +37,7 @@ export async function fetchGetmatch(cfg) {
       await new Promise((r) => setTimeout(r, 300));
     }
   }
-  return out;
+  return [...out.values()];
 }
 
 // Грейд из детали каждой вакансии; ошибки/отсутствие поля — пустой уровень.

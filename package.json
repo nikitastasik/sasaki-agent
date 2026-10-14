@@ -14,5 +14,8 @@
     "setup:telegram": "node src/setup-telegram.mjs",
     "tg:login": "uv run --with telethon python src/telegram/tg_fetch.py login",
     "tg:list": "uv run --with telethon python src/telegram/tg_fetch.py list"
+  },
+  "dependencies": {
+    "playwright-core": "^1.62.1"
   }
 }

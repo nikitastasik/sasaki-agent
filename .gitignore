@@ -8,6 +8,7 @@ sources.local/
 data/
 out/
 logs/
+node_modules/
 .DS_Store
 
 # локальные настройки Claude Code (пути, разрешения твоей машины)

@@ -3,13 +3,14 @@ import {
   openSync, closeSync, unlinkSync, statSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import { projectRoot } from "./env.mjs";
+import { profileDataDir } from "./profiles.mjs";
 import { matchesItem, targetKey } from "./filter.mjs";
+import { wasApplied } from "./companies.mjs";
 
-const dataDir = join(projectRoot, "data");
-const statePath = join(dataDir, "seen.json");
-const jobsPath = join(dataDir, "jobs.json");
-const lockPath = join(dataDir, ".lock");
+const dataDir = () => profileDataDir();
+const statePath = () => join(dataDir(), "seen.json");
+const jobsPath = () => join(dataDir(), "jobs.json");
+const lockPath = () => join(dataDir(), ".lock");
 
 // --- безопасная работа с файлами ---------------------------------------------
 // Битый JSON не превращаем молча в пустоту: иначе следующая запись затёрла бы
@@ -35,7 +36,7 @@ function readJson(path, fallback) {
 // Атомарная запись: во временный файл + rename. Упавший на середине процесс
 // не оставит обрезанный JSON на месте рабочего файла.
 function writeJsonAtomic(path, value) {
-  mkdirSync(dataDir, { recursive: true });
+  mkdirSync(dataDir(), { recursive: true });
   const tmp = `${path}.tmp-${process.pid}`;
   writeFileSync(tmp, JSON.stringify(value, null, 2));
   renameSync(tmp, path);
@@ -48,17 +49,18 @@ function writeJsonAtomic(path, value) {
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 function withLock(fn) {
-  mkdirSync(dataDir, { recursive: true });
+  mkdirSync(dataDir(), { recursive: true });
+  const path = lockPath();
   const deadline = Date.now() + 15_000;
   for (;;) {
     let fd;
     try {
-      fd = openSync(lockPath, "wx");
+      fd = openSync(path, "wx");
     } catch (e) {
       if (e.code !== "EEXIST") throw e;
       try {
-        if (Date.now() - statSync(lockPath).mtimeMs > 30_000) {
-          unlinkSync(lockPath);
+        if (Date.now() - statSync(path).mtimeMs > 30_000) {
+          unlinkSync(path);
           continue;
         }
       } catch {
@@ -72,23 +74,23 @@ function withLock(fn) {
       return fn();
     } finally {
       closeSync(fd);
-      try { unlinkSync(lockPath); } catch {}
+      try { unlinkSync(path); } catch {}
     }
   }
 }
 
 // seen.json: { "<source>:<id>": "<ISO дата отправки>" }
 export function loadSeen() {
-  return new Map(Object.entries(readJson(statePath, {})));
+  return new Map(Object.entries(readJson(statePath(), {})));
 }
 
 // Сливаем с текущим содержимым под локом: пока шёл долгий сбор, параллельный
 // прогон мог дописать свои ключи — их не затираем.
 export function saveSeen(seen) {
   withLock(() => {
-    const current = new Map(Object.entries(readJson(statePath, {})));
+    const current = new Map(Object.entries(readJson(statePath(), {})));
     for (const [k, v] of seen) current.set(k, v);
-    writeJsonAtomic(statePath, Object.fromEntries(current));
+    writeJsonAtomic(statePath(), Object.fromEntries(current));
   });
 }
 
@@ -100,7 +102,7 @@ export function saveSeen(seen) {
 const JOBS_CAP = 2000;
 
 export function loadJobs() {
-  const arr = readJson(jobsPath, []);
+  const arr = readJson(jobsPath(), []);
   return Array.isArray(arr) ? arr : [];
 }
 
@@ -149,7 +151,7 @@ export function appendJobs(items) {
       let room = Math.max(0, JOBS_CAP - tracked);
       merged = merged.filter((j) => j.status || room-- > 0);
     }
-    writeJsonAtomic(jobsPath, merged);
+    writeJsonAtomic(jobsPath(), merged);
   });
 }
 
@@ -172,7 +174,7 @@ export function pruneJobs(cfg) {
       if (!j.prefiltered && !matchesItem(j, cfg)) return false;
       return true;
     });
-    if (kept.length !== jobs.length) writeJsonAtomic(jobsPath, kept);
+    if (kept.length !== jobs.length) writeJsonAtomic(jobsPath(), kept);
     return jobs.length - kept.length;
   });
 }
@@ -190,7 +192,8 @@ export function addJob(rec) {
       id: `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
       collectedAt: new Date().toISOString(),
     };
-    writeJsonAtomic(jobsPath, [job, ...jobs]);
+    if (wasApplied(job)) job.appliedAt = rec.published || job.collectedAt;
+    writeJsonAtomic(jobsPath(), [job, ...jobs]);
     return job;
   });
 }
@@ -203,7 +206,7 @@ export function deleteJob(source, id) {
     const jobs = loadJobs();
     const kept = jobs.filter((j) => !(j.source === source && String(j.id) === String(id)));
     if (kept.length === jobs.length) return false;
-    writeJsonAtomic(jobsPath, kept);
+    writeJsonAtomic(jobsPath(), kept);
     return true;
   });
 }
@@ -215,9 +218,14 @@ export function setJobStatus(source, id, status) {
     const jobs = loadJobs();
     const rec = jobs.find((j) => j.source === source && String(j.id) === String(id));
     if (!rec) return false;
-    if (status === "Новая") delete rec.status;
-    else rec.status = status;
-    writeJsonAtomic(jobsPath, jobs);
+    if (status === "Новая") {
+      delete rec.status;
+      delete rec.appliedAt;
+    } else {
+      rec.status = status;
+      if (wasApplied(rec) && !rec.appliedAt) rec.appliedAt = new Date().toISOString();
+    }
+    writeJsonAtomic(jobsPath(), jobs);
     return true;
   });
 }
@@ -230,7 +238,47 @@ export function setJobLetter(source, id, letter) {
     if (!rec) return false;
     if (letter) rec.letter = letter;
     else delete rec.letter;
-    writeJsonAtomic(jobsPath, jobs);
+    writeJsonAtomic(jobsPath(), jobs);
     return true;
+  });
+}
+
+// Письмо меняет стадию только при уверенной привязке к конкретной вакансии.
+// Ручную стадию не понижаем письмом-подтверждением.
+export function attachMailToJob(source, id, event) {
+  return withLock(() => {
+    const jobs = loadJobs();
+    const job = jobs.find((j) => j.source === source && String(j.id) === String(id));
+    if (!job) return false;
+    job.mailHistory ||= [];
+    if (job.mailHistory.some((m) => m.id === event.id)) return true;
+    job.mailHistory.push({ id: event.id, stage: event.stage, date: event.date,
+      subject: event.subject, url: event.url });
+    job.mailHistory.sort((a, b) => (Date.parse(a.date) || 0) - (Date.parse(b.date) || 0));
+    const ranks = { "Новый": 0, "Отклик": 1, "Без ответа": 1, "Собес": 2,
+      "Тестовое": 3, "Оффер": 4, "Отказ": 5 };
+    if ((ranks[event.stage] || 0) >= (ranks[job.status] || 0)) {
+      job.status = event.stage;
+      if (!job.appliedAt) job.appliedAt = event.date;
+    }
+    writeJsonAtomic(jobsPath(), jobs);
+    return true;
+  });
+}
+
+export function addMailJob(event, company) {
+  return withLock(() => {
+    const jobs = loadJobs();
+    const existing = jobs.find((j) => j.source === "gmail" && j.id === event.id);
+    if (existing) return existing;
+    const job = {
+      source: "gmail", id: event.id, title: event.title, company,
+      url: event.url, status: event.stage, appliedAt: event.date,
+      published: event.date, collectedAt: new Date().toISOString(),
+      mailHistory: [{ id: event.id, stage: event.stage, date: event.date,
+        subject: event.subject, url: event.url }],
+    };
+    writeJsonAtomic(jobsPath(), [job, ...jobs]);
+    return job;
   });
 }

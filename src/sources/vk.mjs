@@ -9,7 +9,7 @@ const PAGE_SIZE = 25;
 const MAX_PAGES = 5;
 
 export async function fetchVk(cfg) {
-  const specialties = cfg.vk?.specialties || [273];
+  const specialties = cfg.vk?.specialties || [282, 281, 283, 270];
   const seen = new Set();
   const out = [];
   for (const sp of specialties) {

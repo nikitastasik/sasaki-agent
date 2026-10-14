@@ -5,21 +5,21 @@
 // из выдачи, вычищаются — файл не растёт бесконечно.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { projectRoot } from "./env.mjs";
+import { profileDataDir } from "./profiles.mjs";
 
-const cachePath = join(projectRoot, "data", "pub-dates.json");
+const cachePath = () => join(profileDataDir(), "pub-dates.json");
 
 function loadCache() {
   try {
-    return JSON.parse(readFileSync(cachePath, "utf8"));
+    return JSON.parse(readFileSync(cachePath(), "utf8"));
   } catch {
     return {};
   }
 }
 
 function saveCache(cache) {
-  mkdirSync(join(projectRoot, "data"), { recursive: true });
-  writeFileSync(cachePath, JSON.stringify(cache, null, 1));
+  mkdirSync(profileDataDir(), { recursive: true });
+  writeFileSync(cachePath(), JSON.stringify(cache, null, 1));
 }
 
 // Проставить items[].published: для незнакомых id зовёт fetchDate(item)

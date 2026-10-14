@@ -4,10 +4,10 @@
 // история — через опциональный источник telethon (examples/sources/telegram-telethon.mjs).
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { projectRoot } from "../lib/env.mjs";
+import { profileDataDir } from "../lib/profiles.mjs";
 import { matchesKeywords, inferGrades, roleKeywords, areasOf, dutiesOf } from "../lib/filter.mjs";
 
-const cursorsPath = join(projectRoot, "data", "tg-cursors.json");
+const cursorsPath = () => join(profileDataDir(), "tg-cursors.json");
 
 export async function fetchTelegramChannels(cfg) {
   const all = cfg.telegram?.channels || [];
@@ -48,11 +48,10 @@ export async function fetchTelegramChannels(cfg) {
           company,
           url: `https://t.me/${name}/${p.msgId}`,     // сам пост (контекст)
           applyUrl: applyLink(p.urls),                 // прямая ссылка-отклик из поста
-          salary: "",
+          salary: salaryFrom(p.text),
           location: locationFrom(p.text),              // формат работы (+город) из текста поста
           level: levelFrom(p.text),                    // явный «Уровень: …», если есть
           published: p.date || "",
-          prefiltered: true,
         });
       }
     } catch (e) {
@@ -259,7 +258,7 @@ const META_LINE = /^(условия|локац|формат|зарплат|з\/?
 
 // Роль из винительного падежа в именительный: «коммуникационного дизайнера» →
 // «коммуникационный дизайнер». Правила грубые, но на фразах-ролях работают.
-const ROLE_NOUNS = "дизайнер|иллюстратор|аниматор|директор|менеджер|редактор|архитектор|визуализатор|моделлер|маркетолог|копирайтер|специалист|художник|разработчик|проектировщик|ретуш[её]р|исследовател|лид";
+const ROLE_NOUNS = "дизайнер|иллюстратор|аниматор|директор|менеджер|редактор|архитектор|визуализатор|моделлер|маркетолог|копирайтер|специалист|художник|разработчик|инженер|проектировщик|ретуш[её]р|исследовател|лид";
 function nominativeRole(s) {
   // конвертируем только «голову» фразы — до первого предлога-хвоста:
   // «… для телевизионного проекта», «… в команду X» должны остаться как есть
@@ -333,7 +332,13 @@ const SEEK_VERB = "(?:ищет|ищут|в\\s+поисках?|в\\s+поиске
 const NOT_COMPANY = /^(мы|нас|наш[аеи]?|вас|ваш[аеи]?|для|что|как|это|если|сейчас|снова|новый|молодой|котор\S*|друзья|ребята?|привет|команда|проект|стартап|компани\S*|вакансия|работ\S*|формат\S*|сайт|топ|кого|задач\S*|целевая|аудитори\S*|портфолио|промокод\S*|запишись|миллион\S*|пользовател\S*|локаци\S*|международн\S*|удал[её]н\S*|remote|hybrid|office|onsite|офис\S*|гибрид\S*|москва|спб|питер|продукт\S*|blender|figma|photoshop|cinema|unity|unreal|tilda|январ\S*|феврал\S*|март\S*|апрел\S*|ма[йя]|июн\S*|июл\S*|август\S*|сентябр\S*|октябр\S*|ноябр\S*|декабр\S*)$/i;
 // латиница — по границам слова, чтобы не задевать Emotions/Headspace и т.п.;
 // для кириллицы \b не работает — там подстроки
-const ROLE_WORD = /\b(designer|design|lead|senior|middle|junior|head|director|manager|graphic|product|motion|animator|ux|ui)\b|дизайн|директор|арт-|руководител|менеджер|специалист|художник|иллюстратор|аниматор|моушн/i;
+const ROLE_WORD = /\b(designer|design|lead|senior|middle|junior|head|director|manager|graphic|product|motion|animator|ux|ui|python|backend|developer|engineer|mlops|nlp)\b|дизайн|директор|арт-|руководител|менеджер|специалист|художник|иллюстратор|аниматор|моушн|разработчик|инженер|машинн\w* обучен/i;
+
+function salaryFrom(text) {
+  const line = String(text || "").split("\n").find((s) =>
+    /зарплат|з\/п|оклад|доход|выплат|💸/i.test(s) && /\d/.test(s) && /₽|руб|\b[кk]\b|тыс|\$|€/i.test(s));
+  return line?.trim().slice(0, 140) || "";
+}
 
 function cleanCompany(raw) {
   const s = (raw || "")
@@ -445,15 +450,15 @@ export function companyFrom(text) {
 
 function loadCursors() {
   try {
-    return JSON.parse(readFileSync(cursorsPath, "utf8"));
+    return JSON.parse(readFileSync(cursorsPath(), "utf8"));
   } catch {
     return {};
   }
 }
 
 function saveCursors(cursors) {
-  mkdirSync(join(projectRoot, "data"), { recursive: true });
-  writeFileSync(cursorsPath, JSON.stringify(cursors, null, 1));
+  mkdirSync(profileDataDir(), { recursive: true });
+  writeFileSync(cursorsPath(), JSON.stringify(cursors, null, 1));
 }
 
 export default { name: "telegram", fetch: fetchTelegramChannels };

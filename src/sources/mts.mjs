@@ -6,7 +6,7 @@ const PAGE = 100;
 const MAX_PAGES = 3;
 
 export async function fetchMts(cfg) {
-  const queries = cfg.mts?.queries || ["дизайн", "design"];
+  const queries = cfg.mts?.queries || ["Python", "ML", "MLOps", "безопасност"];
   const seen = new Set();
   const out = [];
   for (const q of queries) {

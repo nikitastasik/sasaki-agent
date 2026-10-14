@@ -31,7 +31,7 @@ export function hirehiQuery(cfg) {
 }
 
 export async function fetchHirehi(cfg) {
-  const categories = cfg.hirehi?.categories || ["design"];
+  const categories = cfg.hirehi?.categories || ["development", "devops"];
   const { levels, formats } = hirehiQuery(cfg);
   const out = [];
   for (const cat of categories) {
@@ -55,7 +55,6 @@ export async function fetchHirehi(cfg) {
           level: v.level || "",
           format: v.format || "",
           published: v.created_at || "",
-          prefiltered: true,
         });
       }
       if (!json.has_more || !(json.jobs || []).length) break;

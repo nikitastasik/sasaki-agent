@@ -15,7 +15,7 @@ const MAX_PAGES = 2;
 const DETAIL_LIMIT = 8; // параллельность догрузки деталей
 
 export async function fetchFinder(cfg) {
-  const queries = cfg.finder?.queries || ["дизайнер"];
+  const queries = cfg.finder?.queries || (cfg.directions?.length ? cfg.directions.slice(0, 3) : ["дизайнер"]);
   const seen = new Set();
   const out = [];
   for (const q of queries) {

@@ -2,8 +2,8 @@
 // Открывается в Excel/Numbers, импортируется в Google Sheets.
 // delivery.csv.file, дефолт out/vacancies.csv.
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
-import { join, dirname, isAbsolute } from "node:path";
-import { projectRoot } from "../lib/env.mjs";
+import { dirname } from "node:path";
+import { resolveProfileOutput } from "../lib/profiles.mjs";
 
 const HEADER = "дата,источник,вакансия,компания,зарплата,локация,ссылка,статус\n";
 
@@ -11,7 +11,7 @@ export default {
   name: "csv",
   async deliver({ items }, cfg) {
     const file = cfg.delivery?.csv?.file || "out/vacancies.csv";
-    const abs = isAbsolute(file) ? file : join(projectRoot, file);
+    const abs = resolveProfileOutput(file);
     mkdirSync(dirname(abs), { recursive: true });
     const isNew = !existsSync(abs);
     const date = new Date().toISOString().slice(0, 10);
