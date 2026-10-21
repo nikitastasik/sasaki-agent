@@ -311,7 +311,17 @@ export function matchesItem(item, cfg) {
 export function structuralOk(item, cfg) {
   return gradeOk(item, cfg.grades) && formatOk(item, cfg.formats)
     && locationOk(item, cfg.homeCities) && areaOk(item, cfg.directions)
-    && salaryOk(item, cfg.salary) && gigOk(item) && designRoleOk(item);
+    && salaryOk(item, cfg.salary) && gigOk(item) && designRoleOk(item)
+    && companyOk(item, cfg.excludedCompanies);
+}
+
+function companyOk(item, excludedCompanies) {
+  if (!excludedCompanies?.length) return true;
+  const company = normalize(item.company);
+  return !excludedCompanies.some((excluded) => {
+    const name = normalize(excluded);
+    return name && company.includes(name);
+  });
 }
 
 // Смежные с дизайном, но НЕ дизайнерские профессии. Под ключевое слово «senior

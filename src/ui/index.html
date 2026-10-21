@@ -483,6 +483,13 @@
         </div>
       </div>
 
+      <div class="block" data-block="companies">
+        <h2>Исключить компании<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
+        <div class="body">
+          <div class="opts" id="excludedCompanies"></div>
+        </div>
+      </div>
+
       <div class="block" data-block="sources">
         <h2>Источники<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
         <div class="body">
@@ -651,7 +658,7 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-let state = { keywords: [], stopwords: [], sources: [] };
+let state = { keywords: [], stopwords: [], excludedCompanies: [], sources: [] };
 const originalFetch = window.fetch.bind(window);
 window.fetch = (input, init = {}) => {
   if (typeof input === "string" && input.startsWith("/api/")) {
@@ -697,7 +704,7 @@ function optRow(text, checked, onToggle, type = "checkbox") {
 // --- списки слов (стоп-слова, слова уровней) --------------------------------
 // Снятая галочка убирает слово при «Применить критерии»; до сохранения
 // строка остаётся видимой, чтобы можно было передумать.
-const excluded = { stopwords: new Set() };
+const excluded = { stopwords: new Set(), excludedCompanies: new Set() };
 
 function renderWords(containerId, list, onChange) {
   const el = $(containerId);
@@ -1402,6 +1409,7 @@ function render() {
   renderProfileSwitch();
   renderLevels();
   renderWords("stopwords", state.stopwords);
+  renderWords("excludedCompanies", state.excludedCompanies || []);
   renderPresets();
   renderSources();
   renderWFormats();
@@ -1487,6 +1495,7 @@ async function save() {
       onboarded: true,
       keywords,
       stopwords: keep("stopwords", state.stopwords),
+      excludedCompanies: keep("excludedCompanies", state.excludedCompanies || []),
       levels,
       grades,
       formats: formats.length === WORK_FORMATS.length ? [] : formats,

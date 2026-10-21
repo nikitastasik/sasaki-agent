@@ -155,6 +155,9 @@ function applyConfigPatch(current, patch, knownSources) {
   if ("keywords" in patch) next.keywords = validateList(patch.keywords, "keywords");
   if ("directions" in patch) next.directions = validateList(patch.directions, "directions");
   if ("stopwords" in patch) next.stopwords = validateList(patch.stopwords, "stopwords");
+  if ("excludedCompanies" in patch) {
+    next.excludedCompanies = validateList(patch.excludedCompanies, "excludedCompanies");
+  }
   if ("sources" in patch) {
     if (!patch.sources || typeof patch.sources !== "object" || Array.isArray(patch.sources)) {
       throw new Error("sources: ожидается объект {имя: вкл}");
@@ -259,6 +262,7 @@ async function handle(req, res) {
       keywords: cfg.keywords || [],
       directions: cfg.directions || [],
       stopwords: cfg.stopwords || [],
+      excludedCompanies: cfg.excludedCompanies || [],
       formats: cfg.formats || [],
       salary: cfg.salary || { minNetRub: 0, includeUnknown: true },
       levels: levelsFor(cfg),
